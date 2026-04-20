@@ -1,0 +1,27 @@
+# 환경 변수 (절대 커밋하지 마세요)
+.env
+.env.local
+
+# 의존성
+node_modules/
+dashboard/node_modules/
+
+# 빌드 결과물
+dist/
+dashboard/.next/
+dashboard/out/
+
+# 로그
+logs/
+*.log
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# 에디터
+.vscode/settings.json
+.idea/
+
+# 데이터 파일은 포함 (변경 이력 추적)
+# data/videos.json 은 의도적으로 커밋

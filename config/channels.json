@@ -1,0 +1,24 @@
+{
+  "channels": [
+    {
+      "id": "@TTrades_edu",
+      "name": "TTrades Edu(ICT)",
+      "url": "https://www.youtube.com/@TTrades_edu",
+      "notebookId": "101a191f-43d0-43da-9775-c333663532a6",
+      "notebookTitle": "TTrades Edu(ICT)",
+      "enabled": true,
+      "tags": [
+        "ICT"
+      ],
+      "notes": "이 채널에 대한 메모"
+    }
+  ],
+  "settings": {
+    "defaultLanguage": "ko",
+    "autoGenerateAudioOverview": false,
+    "autoGenerateBriefingDoc": true,
+    "notifyOnNewVideo": true,
+    "timezone": "Asia/Seoul",
+    "scheduleTime": "07:00"
+  }
+}

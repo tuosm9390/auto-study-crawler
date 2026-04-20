@@ -1,0 +1,97 @@
+name: 🎬 YouTube → NotebookLM 자동 크롤러
+
+on:
+  # 매일 KST 07:00 실행 (UTC 기준 22:00 전날)
+  schedule:
+    - cron: '0 22 * * *'
+
+  # 수동 실행 지원
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'DRY-RUN 모드 (실제 추가하지 않음)'
+        required: false
+        default: 'false'
+        type: boolean
+      force:
+        description: 'FORCE 모드 (기존 영상도 재처리)'
+        required: false
+        default: 'false'
+        type: boolean
+      target_channel:
+        description: '특정 채널만 처리 (채널 ID 또는 이름, 비워두면 전체)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  crawl:
+    name: 크롤링 실행
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 저장소 체크아웃
+        uses: actions/checkout@v4
+        with:
+          # 상태 파일 커밋을 위해 토큰 필요
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 의존성 설치
+        run: npm ci
+
+      - name: 🚀 크롤러 실행
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          NLM_COOKIES: ${{ secrets.NLM_COOKIES }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LOG_LEVEL: info
+        run: |
+          # 인수 구성
+          ARGS=""
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [[ "${{ github.event.inputs.force }}" == "true" ]]; then
+            ARGS="$ARGS --force"
+          fi
+          if [[ -n "${{ github.event.inputs.target_channel }}" ]]; then
+            ARGS="$ARGS ${{ github.event.inputs.target_channel }}"
+          fi
+
+          npx ts-node crawler/index.ts $ARGS
+
+      - name: 💾 상태 파일 커밋
+        if: success() && github.event.inputs.dry_run != 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+
+          # 변경사항이 있을 때만 커밋
+          if git diff --quiet data/videos.json 2>/dev/null; then
+            echo "📭 변경사항 없음 — 커밋 건너뜀"
+          else
+            git add data/videos.json
+            TIMESTAMP=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST')
+            git commit -m "🤖 자동 업데이트: YouTube 영상 상태 [$TIMESTAMP]"
+            git push
+            echo "✅ 상태 파일 커밋 완료"
+          fi
+
+      - name: 📊 실행 요약
+        if: always()
+        run: |
+          echo "## 크롤러 실행 완료" >> $GITHUB_STEP_SUMMARY
+          echo "- 실행 시간: $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST')" >> $GITHUB_STEP_SUMMARY
+          echo "- DRY-RUN: ${{ github.event.inputs.dry_run || 'false' }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/videos.json ]; then
+            TOTAL=$(cat data/videos.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(len(c['videos']) for c in d['channels'].values()))" 2>/dev/null || echo "N/A")
+            echo "- 총 수집 영상: $TOTAL개" >> $GITHUB_STEP_SUMMARY
+          fi

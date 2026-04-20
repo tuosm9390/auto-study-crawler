@@ -1,0 +1,26 @@
+{
+  "name": "youtube-notebooklm-platform",
+  "version": "1.0.0",
+  "description": "YouTube 채널 영상을 자동으로 NotebookLM에 추가하는 학습 플랫폼",
+  "private": true,
+  "scripts": {
+    "crawler": "ts-node crawler/index.ts",
+    "crawler:dry-run": "ts-node crawler/index.ts --dry-run",
+    "crawler:force": "ts-node crawler/index.ts --force",
+    "dev": "cd dashboard && npm run dev",
+    "build": "cd dashboard && npm run build",
+    "setup": "npm install && cd dashboard && npm install"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "chalk": "^4.1.2",
+    "date-fns": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}
