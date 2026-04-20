@@ -373,11 +373,11 @@ function AddChannelForm({ onAdded }: { onAdded: (ch: ConfigChannel) => void }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-xs mb-1.5" style={{ color: "var(--text-secondary)" }}>
-              YouTube 채널 URL
+              YouTube 채널 또는 재생목록 URL
             </label>
             <input
               type="text"
-              placeholder="https://www.youtube.com/@channel_handle"
+              placeholder="채널: https://www.youtube.com/@handle  |  재생목록: https://www.youtube.com/playlist?list=PL..."
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
               style={inputStyle}

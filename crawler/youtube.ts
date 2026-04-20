@@ -12,6 +12,25 @@ export interface VideoItem {
   duration?: string;
 }
 
+export interface PlaylistInfo {
+  playlistId: string;
+  title: string;
+  channelTitle: string;
+  videoCount: number;
+}
+
+/** YouTube 재생목록 URL에서 playlist ID(PLxxxxx)를 추출 */
+export function extractPlaylistId(url: string): string | null {
+  // https://www.youtube.com/playlist?list=PLxxxxxx
+  const listMatch = url.match(/[?&]list=(PL[a-zA-Z0-9_-]+)/);
+  if (listMatch) return listMatch[1];
+
+  // 이미 PLxxxxx 형식인 경우
+  if (url.startsWith('PL')) return url;
+
+  return null;
+}
+
 export class YouTubeClient {
   private youtube: youtube_v3.Youtube;
 
@@ -134,5 +153,27 @@ export class YouTubeClient {
     const videos = await this.getPlaylistVideos(playlistId, maxResults);
 
     return videos;
+  }
+
+  /**
+   * 재생목록 정보(제목, 채널명 등)를 가져옵니다.
+   */
+  async getPlaylistInfo(playlistId: string): Promise<PlaylistInfo | null> {
+    try {
+      const response = await this.youtube.playlists.list({
+        part: ['snippet', 'contentDetails'],
+        id: [playlistId],
+      });
+      const item = response.data.items?.[0];
+      if (!item) return null;
+      return {
+        playlistId,
+        title: item.snippet?.title || playlistId,
+        channelTitle: item.snippet?.channelTitle || '',
+        videoCount: item.contentDetails?.itemCount || 0,
+      };
+    } catch {
+      return null;
+    }
   }
 }

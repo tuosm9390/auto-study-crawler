@@ -7,18 +7,23 @@ const CONFIG_PATH = path.resolve(process.cwd(), "../config/channels.json");
 // ─── URL 파싱 유틸리티 ──────────────────────────────────────────────────────
 
 function extractYouTubeId(url: string): string {
-  // https://www.youtube.com/@handle → @handle
-  const atMatch = url.match(/@([a-zA-Z0-9_.-]+)/);
+  // @handle
+  const atMatch = url.match(/@([a-zA-Z0-9_.\-]+)/);
   if (atMatch) return `@${atMatch[1]}`;
-
-  // https://www.youtube.com/channel/UCxxxxx → UCxxxxx
+  // /channel/UCxxxxx
   const channelMatch = url.match(/\/channel\/(UC[a-zA-Z0-9_-]+)/);
   if (channelMatch) return channelMatch[1];
-
-  // 이미 @handle 또는 UCxxxxx 형식
+  // 이미 @handle 또는 UCxxxxx
   if (url.startsWith("@") || url.startsWith("UC")) return url;
-
   return url.trim();
+}
+
+/** 유튜브 URL이 재생목록인지 확인 */
+function extractPlaylistId(url: string): string | null {
+  const match = url.match(/[?&]list=(PL[a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  if (url.startsWith("PL")) return url.trim();
+  return null;
 }
 
 function extractNotebookId(url: string): string {
@@ -71,7 +76,32 @@ async function fetchChannelInfo(
   return null;
 }
 
-// ─── POST: 채널 추가 ────────────────────────────────────────────────────────
+/** YouTube API로 재생목록 정보 조회 */
+async function fetchPlaylistInfo(
+  playlistId: string,
+  apiKey: string
+): Promise<{ title: string; channelTitle: string } | null> {
+  try {
+    const params = new URLSearchParams({
+      part: "snippet",
+      id: playlistId,
+      key: apiKey,
+    });
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlists?${params}`
+    );
+    const data = await res.json();
+    if (data.items?.length > 0) {
+      return {
+        title: data.items[0].snippet.title,
+        channelTitle: data.items[0].snippet.channelTitle,
+      };
+    }
+  } catch {}
+  return null;
+}
+
+// ─── POST: 채널/재생목록 추가 ────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   try {
@@ -86,12 +116,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const channelId = extractYouTubeId(youtubeUrl);
+    // 재생목록 URL인지 체크
+    const playlistId = extractPlaylistId(youtubeUrl);
+    const isPlaylist = !!playlistId;
+
+    const channelId = isPlaylist ? playlistId! : extractYouTubeId(youtubeUrl);
     const notebookId = extractNotebookId(notebookUrl);
 
     if (!notebookId || notebookId.length < 10) {
       return NextResponse.json(
-        { error: "NotebookLM URL이 올바르지 않습니다. 노트북 링크를 다시 확인해주세요." },
+        { error: "NotebookLM URL이 올바르지 않습니다." },
         { status: 400 }
       );
     }
@@ -108,20 +142,30 @@ export async function POST(req: Request) {
     );
     if (duplicate) {
       return NextResponse.json(
-        { error: `이미 등록된 채널입니다: ${duplicate.name}` },
+        { error: `이미 등록된 항목입니다: ${duplicate.name}` },
         { status: 409 }
       );
     }
 
-    // YouTube API로 채널명 자동 조회
-    const info = await fetchChannelInfo(channelId);
-    const name = overrideName?.trim() || info?.name || channelId;
-    const canonicalUrl = youtubeUrl.startsWith("http")
-      ? youtubeUrl
-      : `https://www.youtube.com/${youtubeUrl}`;
+    // 이름 자동 조회
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    let name = overrideName?.trim() || channelId;
+    let canonicalUrl = youtubeUrl.startsWith("http") ? youtubeUrl : `https://www.youtube.com/${youtubeUrl}`;
+
+    if (isPlaylist && apiKey) {
+      const info = await fetchPlaylistInfo(playlistId!, apiKey);
+      if (info) name = overrideName?.trim() || info.title;
+    } else if (!isPlaylist && apiKey) {
+      const info = await fetchChannelInfo(channelId);
+      if (info) {
+        name = overrideName?.trim() || info.name;
+        canonicalUrl = info.url;
+      }
+    }
 
     const newChannel = {
       id: channelId,
+      type: isPlaylist ? "playlist" : "channel",
       name,
       url: canonicalUrl,
       notebookId,
