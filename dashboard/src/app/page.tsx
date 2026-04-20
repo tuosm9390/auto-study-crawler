@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ─── 설정 채널 타입 (channels.json) ─────────────────────────────────────────
 
@@ -13,6 +13,13 @@ interface ConfigChannel {
   enabled: boolean;
   tags: string[];
   notes: string;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  isError?: boolean;
 }
 
 // ─── 타입 정의 ─────────────────────────────────────────────────────────────
@@ -466,6 +473,281 @@ function Header({ lastUpdated }: { lastUpdated: string | null }) {
   );
 }
 
+// ─── 학습하기 탭 (NotebookLM 채팅) ─────────────────────────────────────────
+
+function LearnTab({ channels }: { channels: ConfigChannel[] }) {
+  const [selectedNotebookId, setSelectedNotebookId] = useState(
+    channels[0]?.notebookId || ""
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const selectedChannel = channels.find((c) => c.notebookId === selectedNotebookId);
+
+  const handleNotebookChange = (id: string) => {
+    setSelectedNotebookId(id);
+    setMessages([]);
+    setConversationId(undefined);
+  };
+
+  const handleClearChat = () => {
+    setMessages([]);
+    setConversationId(undefined);
+  };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedNotebookId || loading) return;
+
+    const userMsg: ChatMessage = {
+      role: "user",
+      content: input.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/learn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notebookId: selectedNotebookId,
+          question: userMsg.content,
+          conversationId,
+        }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `❌ 오류: ${json.error || "응답 실패"}`,
+            timestamp: new Date().toISOString(),
+            isError: true,
+          },
+        ]);
+      } else {
+        if (json.conversationId) setConversationId(json.conversationId);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: json.answer,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch (err: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `❌ 네트워크 오류: ${err.message}`,
+          timestamp: new Date().toISOString(),
+          isError: true,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const SUGGESTIONS = [
+    "이 노트북의 핵심 개념을 요약해줘",
+    "가장 중요한 학습 포인트는?",
+    "Daily Bias란 무엇인가요?",
+    "ICT 전략 개념 설명해줘",
+  ];
+
+  return (
+    <div className="flex flex-col" style={{ height: "calc(100vh - 340px)", minHeight: 480 }}>
+      {/* 노트북 선택 헤더 */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <select
+          value={selectedNotebookId}
+          onChange={(e) => handleNotebookChange(e.target.value)}
+          className="flex-1 px-4 py-2.5 rounded-xl text-sm outline-none font-medium"
+          style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", color: "var(--text-primary)", minWidth: 200 }}
+        >
+          {channels.map((c) => (
+            <option key={c.notebookId} value={c.notebookId}>
+              📖 {c.name}
+            </option>
+          ))}
+        </select>
+
+        {conversationId && (
+          <span
+            className="text-xs px-3 py-1.5 rounded-lg"
+            style={{ background: "rgba(61,223,168,0.1)", color: "var(--accent-green)", border: "1px solid rgba(61,223,168,0.2)" }}
+          >
+            💬 대화 진행 중
+          </span>
+        )}
+
+        {messages.length > 0 && (
+          <button
+            onClick={handleClearChat}
+            className="text-xs px-3 py-1.5 rounded-lg transition-all"
+            style={{ background: "var(--bg-card-hover)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+          >
+            ↺ 초기화
+          </button>
+        )}
+
+        {selectedChannel && (
+          <a
+            href={`https://notebooklm.google.com/notebook/${selectedChannel.notebookId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs px-3 py-1.5 rounded-lg transition-all"
+            style={{ background: "rgba(124,92,252,0.15)", color: "var(--accent-purple)", border: "1px solid rgba(124,92,252,0.3)" }}
+          >
+            🔗 NotebookLM
+          </a>
+        )}
+      </div>
+
+      {/* 시작 안내 */}
+      {messages.length === 0 && !loading && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ color: "var(--text-muted)" }}>
+          <div className="text-5xl mb-4">🧠</div>
+          <div className="text-base font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
+            {selectedChannel ? `"${selectedChannel.name}" 노트북에 질문하세요` : "노트북을 선택하세요"}
+          </div>
+          <div className="text-sm mb-6">영상 내용에 대해 자유롭게 질문하면 NotebookLM이 답변합니다</div>
+          <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+            {SUGGESTIONS.map((q) => (
+              <button
+                key={q}
+                onClick={() => { setInput(q); textareaRef.current?.focus(); }}
+                className="text-xs px-3 py-2 rounded-xl transition-all"
+                style={{ background: "var(--bg-card)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 대화 목록 */}
+      {(messages.length > 0 || loading) && (
+        <div
+          className="flex-1 overflow-y-auto mb-4 space-y-4 pr-1"
+          style={{ scrollbarWidth: "thin", scrollbarColor: "var(--border) transparent" }}
+        >
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div
+                className="max-w-[80%] px-4 py-3 text-sm leading-relaxed"
+                style={{
+                  background:
+                    msg.role === "user"
+                      ? "var(--gradient-primary)"
+                      : msg.isError
+                      ? "rgba(255,95,126,0.1)"
+                      : "var(--bg-secondary)",
+                  color: msg.role === "user" ? "white" : msg.isError ? "var(--accent-red)" : "var(--text-primary)",
+                  border: msg.role === "assistant" ? "1px solid var(--border)" : "none",
+                  borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                }}
+              >
+                {msg.role === "assistant" && (
+                  <div className="flex items-center gap-1 mb-2" style={{ color: "var(--accent-purple)", fontSize: 11 }}>
+                    🧠 NotebookLM
+                  </div>
+                )}
+                <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.content}</div>
+                <div className="text-right mt-1" style={{ fontSize: 10, opacity: 0.45 }}>
+                  {new Date(msg.timestamp).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div
+                className="px-4 py-3 text-sm"
+                style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "18px 18px 18px 4px" }}
+              >
+                <div className="flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: "var(--accent-purple)", animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
+                      />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 12 }}>NotebookLM이 생각 중입니다...</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+
+      {/* 입력 영역 */}
+      <div
+        className="flex gap-2 items-end"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: "10px 12px" }}
+      >
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={selectedNotebookId ? "질문을 입력하세요... (Shift+Enter로 줄바꿈, Enter로 전송)" : "위에서 노트북을 선택해주세요"}
+          disabled={!selectedNotebookId || loading}
+          rows={2}
+          className="flex-1 resize-none outline-none text-sm"
+          style={{ background: "transparent", color: "var(--text-primary)", border: "none", lineHeight: 1.5 }}
+        />
+        <button
+          onClick={sendMessage}
+          disabled={!input.trim() || !selectedNotebookId || loading}
+          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all"
+          style={{
+            background: input.trim() && selectedNotebookId && !loading ? "var(--gradient-primary)" : "var(--bg-secondary)",
+            color: input.trim() && selectedNotebookId && !loading ? "white" : "var(--text-muted)",
+          }}
+        >
+          {loading ? (
+            <span style={{ fontSize: 16 }}>⏳</span>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── 빈 상태 ────────────────────────────────────────────────────────────────
 
 function EmptyState() {
@@ -520,7 +802,7 @@ export default function HomePage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"videos" | "channels">("videos");
+  const [activeTab, setActiveTab] = useState<"videos" | "channels" | "learn">("videos");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterChannel, setFilterChannel] = useState<string>("all");
   const [filterAdded, setFilterAdded] = useState<"all" | "added" | "pending">("all");
@@ -689,7 +971,7 @@ export default function HomePage() {
               className="flex gap-2 mb-6 p-1 rounded-xl w-fit"
               style={{ background: "var(--bg-secondary)" }}
             >
-              {(["videos", "channels"] as const).map((tab) => (
+              {(["videos", "channels", "learn"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -701,7 +983,7 @@ export default function HomePage() {
                       activeTab === tab ? "white" : "var(--text-secondary)",
                   }}
                 >
-                  {tab === "videos" ? "🎬 영상 목록" : "📺 채널 관리"}
+                  {tab === "videos" ? "🎬 영상 목록" : tab === "channels" ? "📺 채널 관리" : "🧠 학습하기"}
                 </button>
               ))}
             </div>
@@ -808,6 +1090,26 @@ export default function HomePage() {
                         onToggle={handleChannelToggled}
                       />
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* 학습하기 탭 */}
+            {activeTab === "learn" && (
+              <div className="animate-fade-in-up">
+                {configChannels.filter((c) => c.notebookId).length === 0 ? (
+                  <div className="card p-12 text-center">
+                    <div className="text-5xl mb-4">🧠</div>
+                    <div className="text-lg font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
+                      학습할 노트북이 없습니다
+                    </div>
+                    <div className="text-sm" style={{ color: "var(--text-muted)" }}>
+                      채널 관리 탭에서 YouTube 채널과 NotebookLM 노트북을 먼저 등록해주세요
+                    </div>
+                  </div>
+                ) : (
+                  <div className="card p-6">
+                    <LearnTab channels={configChannels.filter((c) => c.notebookId)} />
                   </div>
                 )}
               </div>

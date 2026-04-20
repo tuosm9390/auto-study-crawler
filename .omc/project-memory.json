@@ -1,0 +1,124 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776659594136,
+  "projectRoot": "C:\\Users\\tuosm\\Documents\\New project",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "crawler": "ts-node crawler/index.ts",
+      "crawler:dry-run": "ts-node crawler/index.ts --dry-run",
+      "crawler:force": "ts-node crawler/index.ts --force",
+      "dev": "cd dashboard && npm run dev",
+      "build": "cd dashboard && npm run build",
+      "setup": "npm install && cd dashboard && npm install"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts"
+    ],
+    "gitBranches": {
+      "defaultBranch": "master",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "config": {
+      "path": "config",
+      "purpose": "Configuration files",
+      "fileCount": 1,
+      "lastAccessed": 1776659594071,
+      "keyFiles": [
+        "channels.json"
+      ]
+    },
+    "crawler": {
+      "path": "crawler",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1776659594072,
+      "keyFiles": [
+        "index.ts",
+        "logger.ts",
+        "notebooklm.ts",
+        "notify.ts",
+        "state.ts"
+      ]
+    },
+    "dashboard": {
+      "path": "dashboard",
+      "purpose": null,
+      "fileCount": 12,
+      "lastAccessed": 1776659594092,
+      "keyFiles": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "eslint.config.mjs",
+        "next-env.d.ts",
+        "next.config.ts"
+      ]
+    },
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 1,
+      "lastAccessed": 1776659594093,
+      "keyFiles": [
+        "videos.json"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1776659594093,
+      "keyFiles": [
+        "install-scheduler.ps1"
+      ]
+    },
+    "dashboard\\node_modules": {
+      "path": "dashboard\\node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1776659594095,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}
