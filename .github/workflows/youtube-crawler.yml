@@ -45,6 +45,15 @@ jobs:
       - name: 📦 의존성 설치
         run: npm ci
 
+      - name: 🔑 NotebookLM 인증 복원
+        env:
+          NLM_COOKIES: ${{ secrets.NLM_COOKIES }}
+        run: |
+          # nlm CLI가 읽는 경로에 cookies.json 파일 복원
+          mkdir -p ~/.notebooklm-mcp-cli/profiles/default
+          echo "$NLM_COOKIES" > ~/.notebooklm-mcp-cli/profiles/default/cookies.json
+          echo "✅ NotebookLM 쿠키 복원 완료"
+
       - name: 🚀 크롤러 실행
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
