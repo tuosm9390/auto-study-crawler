@@ -45,6 +45,19 @@ jobs:
       - name: 📦 의존성 설치
         run: npm ci
 
+      - name: 🐍 Python + uv 설정
+        run: |
+          # uv 설치 (notebooklm-mcp-cli 설치에 필요)
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: 🔧 nlm CLI 설치
+        run: |
+          uv tool install notebooklm-mcp-cli
+          # uv tool bin 경로를 PATH에 추가
+          echo "$(uv tool dir)/bin" >> $GITHUB_PATH
+          uv tool run nlm --version || true
+
       - name: 🔑 NotebookLM 인증 복원
         env:
           NLM_COOKIES: ${{ secrets.NLM_COOKIES }}
