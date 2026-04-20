@@ -79,11 +79,45 @@ export class StateManager {
     return channel.videos.some((v) => v.videoId === videoId);
   }
 
+  /** state에 없는 신규 videoId 목록 반환 */
   getNewVideos(channelId: string, fetchedVideoIds: string[]): string[] {
     const known = new Set(
       (this.db.channels[channelId]?.videos || []).map((v) => v.videoId)
     );
     return fetchedVideoIds.filter((id) => !known.has(id));
+  }
+
+  /** 해당 영상이 이미 NotebookLM에 성공적으로 등록되었는지 확인 */
+  isAlreadyAdded(channelId: string, videoId: string): boolean {
+    const channel = this.db.channels[channelId];
+    if (!channel) return false;
+    const video = channel.videos.find((v) => v.videoId === videoId);
+    return video?.addedToNotebook === true;
+  }
+
+  /**
+   * 처리 대상 videoId 목록 반환:
+   * - 일반 모드: state에 없는 신규 영상 + state에 있지만 아직 NotebookLM 미등록인 영상(재시도)
+   * - force 모드: NotebookLM에 이미 등록된 영상은 제외 (중복 방지)
+   */
+  getTargetVideos(
+    channelId: string,
+    fetchedVideoIds: string[],
+    force: boolean
+  ): string[] {
+    const videos = this.db.channels[channelId]?.videos || [];
+    const addedIds = new Set(videos.filter((v) => v.addedToNotebook).map((v) => v.videoId));
+
+    if (force) {
+      // force 모드: 이미 NotebookLM에 등록된 영상은 제외 (중복 업로드 방지)
+      return fetchedVideoIds.filter((id) => !addedIds.has(id));
+    } else {
+      // 일반 모드: state에 없는 신규 영상 + 등록 실패 영상(재시도)
+      const knownIds = new Set(videos.map((v) => v.videoId));
+      return fetchedVideoIds.filter(
+        (id) => !knownIds.has(id) || (!addedIds.has(id) && knownIds.has(id))
+      );
+    }
   }
 
   addVideo(channelId: string, video: VideoRecord): void {

@@ -82,7 +82,7 @@ async function processChannel(
 
   const channelId = channelConfig.id;
   const maxCheckVideos = parseInt(process.env.MAX_CHECK_VIDEOS || "50");
-  const maxInitialVideos = parseInt(process.env.MAX_INITIAL_VIDEOS || "20");
+  const maxInitialVideos = parseInt(process.env.MAX_INITIAL_VIDEOS || "100");
 
   // 기존 채널 상태 확인
   let channelRecord = stateManager.getChannel(channelId);
@@ -129,21 +129,22 @@ async function processChannel(
     stateManager.setChannel(channelId, channelRecord);
   }
 
-  // 신규 영상 탐지
+  // 처리할 영상 선별 (신규 + 등록 실패 재시도, 이미 NotebookLM 등록된 것은 제외)
   const allVideoIds = videos.map((v) => v.videoId);
-  const newVideoIds = options.force
-    ? allVideoIds
-    : stateManager.getNewVideos(channelId, allVideoIds);
+  const targetVideoIds = stateManager.getTargetVideos(
+    channelId,
+    allVideoIds,
+    options.force
+  );
+  const newVideos = videos.filter((v) => targetVideoIds.includes(v.videoId));
 
-  const newVideos = videos.filter((v) => newVideoIds.includes(v.videoId));
-
-  if (newVideos.length === 0) {
+  if (targetVideoIds.length === 0) {
     logger.info("📭 새로운 영상이 없습니다.");
     stateManager.updateLastChecked(channelId);
     return { newCount: 0, newVideos: [] };
   }
 
-  logger.info(`🆕 새 영상 ${newVideos.length}개 발견!`);
+  logger.info(`🆕 처리할 영상 ${newVideos.length}개 (신규 또는 이전 실패 재시도)`);
   newVideos.forEach((v) => logger.newVideo(v.title, v.url));
 
   if (options.dryRun) {
@@ -171,6 +172,12 @@ async function processChannel(
   // NotebookLM에 소스 추가
   let successCount = 0;
   for (const video of newVideos) {
+    // 이중 안전장치: 이미 성공적으로 등록된 영상은 무조건 스킵 (중복 방지)
+    if (stateManager.isAlreadyAdded(channelId, video.videoId)) {
+      logger.info(`  ⏭️  이미 등록됨 (스킵): ${video.title}`);
+      continue;
+    }
+
     logger.info(`  ➕ 추가 중: ${video.title}`);
 
     // 상태 파일에 미리 등록
